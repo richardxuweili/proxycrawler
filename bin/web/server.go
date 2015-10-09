@@ -15,6 +15,7 @@ import (
 var config = struct {
 	ConfigFile string
 	TestURL    string
+	FrontEndURL string
 	Interval   time.Duration
 	Cap        int
 }{}
@@ -51,6 +52,7 @@ func main() {
 
 func SetFlag() {
 	flag.StringVar(&config.ConfigFile, "c", "", "set config path")
+	flag.StringVar(&config.FrontEndURL, "front", "", "allow access url")
 	flag.StringVar(&config.TestURL, "url", "http://www.douban.com", "use it to test proxy")
 	flag.DurationVar(&config.Interval, "t", 1*time.Minute, "flush cache")
 	flag.IntVar(&config.Cap, "max", 100, "max number of proxy")
@@ -76,6 +78,8 @@ func ParseFlag() {
 
 func CacheHandler(cache *proxysCache) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		header := w.Header()
+		header.Set(`Access-Control-Allow-Origin`, config.FrontEndURL)
 		json.NewEncoder(w).Encode(cache.Read())
 	}
 }
