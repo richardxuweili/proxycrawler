@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -23,6 +24,11 @@ func CyberSource() ([]*Proxy, error) {
 }
 
 func extractProxys(str string) (proxys []*Proxy) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println(err)
+		}
+	}()
 	exp := regexp.MustCompile(`\[(.+?)\]`)
 	expN1 := regexp.MustCompile(`\((.+)\)%2000`)
 	expN2 := regexp.MustCompile(`ps\[(\d+)\]`)
