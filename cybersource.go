@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -26,7 +27,8 @@ func CyberSource() ([]*Proxy, error) {
 func extractProxys(str string) (proxys []*Proxy) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Println(err)
+			log.Println(err,"may be blocked by source site, sleep 259s")
+			time.Sleep(259*time.Second)
 		}
 	}()
 	exp := regexp.MustCompile(`\[(.+?)\]`)
