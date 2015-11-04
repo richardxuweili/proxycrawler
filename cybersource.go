@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"regexp"
@@ -20,25 +21,51 @@ func CyberSource() ([]*Proxy, error) {
 	if err != nil {
 		return nil, err
 	}
+	total, err := strconv.Atoi(doc.Find("#div_result > span").Text())
+	if err != nil {
+		return nil, err
+	}
+	pageNum := total / 500
+	if total%500 > 0 {
+		pageNum += 1
+	}
 	proxys := extractProxys(doc.Find("#content > script").Text())
+	for i := 2; i <= pageNum; i++ {
+		time.Sleep(1000 * time.Millisecond)
+		resp, err := http.Get("http://www.cybersyndrome.net/search.cgi?q=CN&a=ABC&f=s&s=new&n=500&p=" + strconv.Itoa(i))
+		if err != nil {
+			return nil, err
+		}
+		doc, err := goquery.NewDocumentFromResponse(resp)
+		if err != nil {
+			return nil, err
+		}
+		proxys = append(proxys, extractProxys(doc.Find("#content > script").Text())...)
+	}
 	return proxys, nil
 }
 
 func extractProxys(str string) (proxys []*Proxy) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Println(err,"may be blocked by source site, sleep 259s")
-			time.Sleep(259*time.Second)
+			log.Println(err, "may be blocked by source site, sleep 60s")
+			fmt.Println(err, "may be blocked by source site, sleep 60s")
+			time.Sleep(60 * time.Second)
 		}
 	}()
 	exp := regexp.MustCompile(`\[(.+?)\]`)
-	expN1 := regexp.MustCompile(`\((.+)\)%2000`)
+	expN1 := regexp.MustCompile(`\((.+)\)%(\d+)`)
 	expN2 := regexp.MustCompile(`ps\[(\d+)\]`)
 	expN3 := regexp.MustCompile(`\d+\*\d+`)
 	matched := exp.FindAllStringSubmatch(str, 2)
 	as := strings.Split(matched[0][1], ",")
 	ps := strings.Split(matched[1][1], ",")
 	s1 := expN1.FindStringSubmatch(str)[1]
+	i, err := strconv.Atoi(expN1.FindStringSubmatch(str)[2])
+	if err != nil {
+		panic(err)
+
+	}
 	s2 := expN2.ReplaceAllStringFunc(s1, func(str string) string {
 		num, _ := strconv.Atoi(strings.Trim(str, "ps[]"))
 		return ps[num]
@@ -55,7 +82,7 @@ func extractProxys(str string) (proxys []*Proxy) {
 		num, _ := strconv.Atoi(v)
 		n += int64(num)
 	}
-	n = n % 2000
+	n = n % int64(i)
 
 	as = append(as[n:], as[0:n]...)
 	for i := range as {
