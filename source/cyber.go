@@ -1,4 +1,4 @@
-package proxy
+package source
 
 import (
 	"fmt"
@@ -10,9 +10,10 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/xlaurent/proxycrawler/proxy"
 )
 
-func CyberSource() ([]*Proxy, error) {
+func Cyber() ([]*proxy.Proxy, error) {
 	resp, err := http.Get("http://www.cybersyndrome.net/search.cgi?q=CN&a=ABC&f=s&s=new&n=500")
 	if err != nil {
 		return nil, err
@@ -45,7 +46,7 @@ func CyberSource() ([]*Proxy, error) {
 	return proxys, nil
 }
 
-func extractProxys(str string) (proxys []*Proxy) {
+func extractProxys(str string) (proxys []*proxy.Proxy) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Println(err, "may be blocked by source site, sleep 60s")
@@ -88,7 +89,7 @@ func extractProxys(str string) (proxys []*Proxy) {
 	for i := range as {
 		idx := i / 4
 		if i%4 == 0 {
-			proxys = append(proxys, &Proxy{"http", as[i] + ".", ps[idx], 0})
+			proxys = append(proxys, &proxy.Proxy{"http", as[i] + ".", ps[idx], 0})
 		} else if i%4 == 3 {
 			proxys[idx].IP += as[i]
 		} else {

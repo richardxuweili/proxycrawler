@@ -1,4 +1,4 @@
-package proxy
+package proxycrawler
 
 import (
 	"math/rand"

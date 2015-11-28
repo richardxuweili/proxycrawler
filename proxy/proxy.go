@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -15,7 +16,7 @@ type Proxy struct {
 }
 
 func (p *Proxy) Test(client *http.Client, URL string, check func(resp *http.Response) error) error {
-	transport, err := p.Transport()
+	transport, err := p.Transport(client.Timeout)
 	if err != nil {
 		return err
 	}
@@ -28,21 +29,26 @@ func (p *Proxy) Test(client *http.Client, URL string, check func(resp *http.Resp
 	}
 	p.ConnTime = connTime
 	if check == nil {
-		return nil
+		check = DefaultCheck
 	}
-	err = check(resp)
-	if err != nil {
+	if err = check(resp); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (p *Proxy) Transport() (*http.Transport, error) {
+func (p *Proxy) Transport(timeout time.Duration) (*http.Transport, error) {
 	URL, err := url.Parse(p.String())
 	if err != nil {
 		return nil, fmt.Errorf("can't parse proxy url %s,%v", p.String(), err)
 	}
-	return &http.Transport{Proxy: http.ProxyURL(URL)}, nil
+	return &http.Transport{
+		Proxy: http.ProxyURL(URL),
+		Dial: (&net.Dialer{
+			Timeout: timeout,
+		}).Dial,
+		TLSHandshakeTimeout: timeout,
+	}, nil
 }
 
 func (p Proxy) String() string {

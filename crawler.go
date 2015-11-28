@@ -1,21 +1,22 @@
-package proxy
+package proxycrawler
 
 import (
 	"log"
 	"net/http"
 	"sync"
 	"time"
-)
 
-type Source func() ([]*Proxy, error)
+	"github.com/xlaurent/proxycrawler/proxy"
+	"github.com/xlaurent/proxycrawler/source"
+)
 
 type Crawler struct {
 	clients []*http.Client
-	sources []Source
+	sources []source.Source
 }
 
-func NewCrawler(sources []Source, timeout time.Duration, concurrency int) *Crawler {
-	clients := make([]*http.Client, len(sources)*concurrency)
+func New(sources []source.Source, timeout time.Duration) *Crawler {
+	clients := make([]*http.Client, len(sources))
 	for i := range clients {
 		clients[i] = &http.Client{Timeout: timeout}
 	}
@@ -26,11 +27,12 @@ func NewCrawler(sources []Source, timeout time.Duration, concurrency int) *Crawl
 }
 
 func (p *Crawler) FetchProxys(
-	recvCh chan<- *Proxy,
 	testURL string,
+	max int,
 	check func(resp *http.Response) error,
 	cancelCh <-chan struct{},
-) {
+) chan *proxy.Proxy {
+	recvCh := make(chan *proxy.Proxy, max)
 	waiter := &sync.WaitGroup{}
 	for i := range p.sources {
 		waiter.Add(1)
@@ -42,37 +44,29 @@ func (p *Crawler) FetchProxys(
 				return
 			}
 			shuffleSlice(proxys)
-			concurrency := len(p.clients) / len(p.sources)
-			eachLen := len(proxys) / concurrency
-			if eachLen == 0 {
-				eachLen = len(proxys)
-				concurrency = 1
-			}
-			for j := 0; j < concurrency; j++ {
-				end := (j + 1) * eachLen
-				if j == concurrency-1 {
-					end = len(proxys)
+			for _, proxy := range proxys {
+				select {
+				case <-cancelCh:
+					return
+				default:
 				}
-				waiter.Add(1)
-				go func(subProxys []*Proxy, client *http.Client) {
-					defer waiter.Done()
-					for _, proxy := range subProxys {
-						if err := proxy.Test(client, testURL, check); err != nil {
-							continue
-						}
-						select {
-						case recvCh <- proxy:
-						case <-cancelCh:
-							return
-						default:
-							log.Printf("because the channel is full,stop fetching source %d", i)
-							return
-						}
-					}
-				}(proxys[j*eachLen:end], p.clients[i*concurrency+j])
+				if err := proxy.Test(p.clients[i], testURL, check); err != nil {
+					continue
+				}
+				select {
+				case recvCh <- proxy:
+				case <-cancelCh:
+					return
+				default:
+					log.Printf("because the channel is full,stop fetching source %d", i)
+					return
+				}
 			}
 		}(i)
 	}
-	waiter.Wait()
-	close(recvCh)
+	go func() {
+		waiter.Wait()
+		close(recvCh)
+	}()
+	return recvCh
 }
